@@ -1,0 +1,10 @@
+[package]
+name = "mdreader"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = "0.26.0"
+egui = "0.26.0"
+walkdir = "2.4.0"
+pulldown-cmark = "0.9.3" 
