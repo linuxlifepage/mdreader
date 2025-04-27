@@ -1,8 +1,16 @@
-use eframe::egui::{Color32, FontFamily, FontId, TextStyle, Visuals, RichText, FontData, FontDefinitions};
+use eframe::egui::{self, Color32, FontFamily, FontId, TextStyle, Visuals, RichText, FontData, FontDefinitions};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 use std::fs;
 use pulldown_cmark::{Parser, Event, Tag, HeadingLevel};
+use sys_locale; // Import for language detection
+
+// Enum to represent supported languages
+#[derive(PartialEq, Clone, Copy)]
+enum Language {
+    EN,
+    RU,
+}
 
 struct MdReader {
     current_dir: PathBuf,
@@ -17,6 +25,7 @@ struct MdReader {
     show_new_category_dialog: bool,
     show_new_file_dialog: bool,
     dark_mode: bool,
+    current_language: Language, // Add state for current language
 }
 
 struct Category {
@@ -35,6 +44,13 @@ struct FileEntry {
 impl MdReader {
     fn new() -> Self {
         let root_dir = std::env::current_dir().unwrap();
+
+        // Detect system language
+        let default_language = match sys_locale::get_locale() {
+            Some(locale) if locale.starts_with("ru") => Language::RU,
+            _ => Language::EN, // Default to English
+        };
+
         let mut app = Self {
             current_dir: root_dir.clone(),
             root_dir,
@@ -48,6 +64,7 @@ impl MdReader {
             show_new_category_dialog: false,
             show_new_file_dialog: false,
             dark_mode: true,
+            current_language: default_language, // Initialize with detected language
         };
         app.scan_directory();
         app
@@ -371,6 +388,13 @@ impl MdReader {
         self.dark_mode = !self.dark_mode;
     }
 
+    fn toggle_language(&mut self) {
+        self.current_language = match self.current_language {
+            Language::EN => Language::RU,
+            Language::RU => Language::EN,
+        };
+    }
+
     fn setup_fonts(ctx: &egui::Context) {
         let mut fonts = FontDefinitions::default();
         
@@ -474,58 +498,103 @@ impl eframe::App for MdReader {
                 ui.heading(RichText::new("MD Reader").size(28.0));  // Уменьшили с 30.0
                 ui.add_space(40.0);
                 
-                let button_text = RichText::new("Создать категорию").size(17.0);
+                // --- Create Category Button ---
+                let create_category_text = match self.current_language {
+                    Language::EN => "Create Category",
+                    Language::RU => "Создать категорию",
+                };
                 if ui.add(
-                    egui::Button::new(button_text)
+                    egui::Button::new(RichText::new(create_category_text).size(17.0))
                         .rounding(10.0)
-                        .min_size(egui::vec2(140.0, 35.0)) // Увеличили размер кнопок в топ меню
+                        .min_size(egui::vec2(140.0, 35.0))
                 ).clicked() {
                     self.show_new_category_dialog = true;
                 }
-                
-                let button_text = RichText::new("Создать заметку").size(17.0);
+
+                // --- Create Note Button ---
+                let create_note_text = match self.current_language {
+                    Language::EN => "Create Note",
+                    Language::RU => "Создать заметку",
+                };
                 if ui.add(
-                    egui::Button::new(button_text)
+                    egui::Button::new(RichText::new(create_note_text).size(17.0))
                         .rounding(10.0)
                         .min_size(egui::vec2(120.0, 35.0))
                 ).clicked() {
                     self.show_new_file_dialog = true;
                 }
-                
-                let mode_text = if self.edit_mode { "Режим чтения" } else { "Режим редактирования" };
-                let button_text = RichText::new(mode_text).size(17.0);
+
+                // --- Edit/Read Mode Button ---
+                let mode_text = match (self.edit_mode, self.current_language) {
+                    (true, Language::EN) => "Read Mode",
+                    (true, Language::RU) => "Режим чтения",
+                    (false, Language::EN) => "Edit Mode",
+                    (false, Language::RU) => "Режим редактирования",
+                };
                 if ui.add(
-                    egui::Button::new(button_text)
+                    egui::Button::new(RichText::new(mode_text).size(17.0))
                         .rounding(10.0)
                         .min_size(egui::vec2(160.0, 35.0))
                 ).clicked() {
                     self.edit_mode = !self.edit_mode;
                 }
-                
-                let theme_text = if self.dark_mode { "🌞 Светлая тема" } else { "🌙 Темная тема" };
-                let button_text = RichText::new(theme_text).size(17.0);
+
+                // --- Theme Toggle Button ---
+                let theme_text = match (self.dark_mode, self.current_language) {
+                    (true, Language::EN) => "🌞 Light Theme",
+                    (true, Language::RU) => "🌞 Светлая тема",
+                    (false, Language::EN) => "🌙 Dark Theme",
+                    (false, Language::RU) => "🌙 Темная тема",
+                };
                 if ui.add(
-                    egui::Button::new(button_text)
+                    egui::Button::new(RichText::new(theme_text).size(17.0))
                         .rounding(10.0)
                         .min_size(egui::vec2(140.0, 35.0))
                 ).clicked() {
                     self.toggle_theme();
                 }
+
+                // --- Language Toggle Button ---
+                let lang_toggle_text = match self.current_language {
+                    Language::EN => "RU", // Show the other language
+                    Language::RU => "EN",
+                };
+                 if ui.add(
+                    egui::Button::new(RichText::new(lang_toggle_text).size(17.0))
+                        .rounding(10.0)
+                        .min_size(egui::vec2(50.0, 35.0)) // Smaller button
+                ).clicked() {
+                    self.toggle_language();
+                }
+
             });
-            ui.add_space(5.0); // Добавляем отступ снизу
+            ui.add_space(5.0); // Add spacing at the bottom
         });
 
         if self.show_new_category_dialog {
             let mut should_create = false;
             let mut dialog_open = self.show_new_category_dialog;
             
-            egui::Window::new("Новая категория")
+            let window_title = match self.current_language {
+                Language::EN => "New Category",
+                Language::RU => "Новая категория",
+            };
+            let label_text = match self.current_language {
+                Language::EN => "Enter category name:",
+                Language::RU => "Введите имя категории:",
+            };
+            let button_text = match self.current_language {
+                Language::EN => "Create",
+                Language::RU => "Создать",
+            };
+
+            egui::Window::new(window_title)
                 .open(&mut dialog_open)
                 .show(ctx, |ui| {
-                    ui.label("Введите имя категории:");
+                    ui.label(label_text);
                     let text_edit_response = ui.text_edit_singleline(&mut self.new_category_name);
-                    let button_response = ui.button("Создать");
-                    
+                    let button_response = ui.button(button_text);
+
                     if button_response.clicked() || (text_edit_response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
                         should_create = true;
                     }
@@ -542,13 +611,26 @@ impl eframe::App for MdReader {
             let mut should_create = false;
             let mut dialog_open = self.show_new_file_dialog;
             
-            egui::Window::new("Новая заметка")
+            let window_title = match self.current_language {
+                Language::EN => "New Note",
+                Language::RU => "Новая заметка",
+            };
+             let label_text = match self.current_language {
+                Language::EN => "Enter note name:",
+                Language::RU => "Введите название заметки:",
+            };
+            let button_text = match self.current_language {
+                Language::EN => "Create",
+                Language::RU => "Создать",
+            };
+
+            egui::Window::new(window_title)
                 .open(&mut dialog_open)
                 .show(ctx, |ui| {
-                    ui.label("Введите название заметки:");
+                    ui.label(label_text);
                     let text_edit_response = ui.text_edit_singleline(&mut self.new_file_name);
-                    let button_response = ui.button("Создать");
-                    
+                    let button_response = ui.button(button_text);
+
                     if button_response.clicked() || (text_edit_response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter))) {
                         should_create = true;
                     }
