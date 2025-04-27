@@ -249,12 +249,12 @@ impl MdReader {
             egui::Button::new(
                 RichText::new(format!("📁 {}", category.name))
                     .color(text_color)
-                    .size(20.0)  // Было 16.0
+                    .size(16.0)  // Было 16.0
                     .strong()    // Делаем текст категорий жирным
             )
             .fill(category_color)
             .rounding(10.0)     // Было 8.0
-            .min_size(egui::vec2(ui.available_width(), 32.0))  // Минимальная высота кнопки
+            .min_size(egui::vec2(ui.available_width(), 16.0))  // Минимальная высота кнопки
         );
         
         if response.clicked() {
@@ -272,7 +272,7 @@ impl MdReader {
                         egui::Button::new(
                             RichText::new(format!("📄 {}", file.name))
                                 .color(text_color)
-                                .size(16.0)  // Оставляем файлы немного меньше категорий
+                                .size(14.0)  // Оставляем файлы немного меньше категорий
                         )
                         .fill(button_color)
                         .rounding(8.0)
@@ -567,11 +567,14 @@ impl eframe::App for MdReader {
             .max_width(600.0)
             .default_width(self.sidebar_width)
             .show(ctx, |ui| {
-                let categories = std::mem::take(&mut self.categories);
-                for mut category in categories {
-                    self.render_category(ui, &mut category);
-                    self.categories.push(category);
-                }
+                // Add a vertical ScrollArea
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    let categories = std::mem::take(&mut self.categories);
+                    for mut category in categories {
+                        self.render_category(ui, &mut category);
+                        self.categories.push(category);
+                    }
+                });
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
