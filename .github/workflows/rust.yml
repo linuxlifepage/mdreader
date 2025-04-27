@@ -1,0 +1,46 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*.*.*' # Trigger only on version tags like v0.1.0, v1.0.0
+
+env:
+  CARGO_TERM_COLOR: always
+  # Set the binary name based on your Cargo.toml package name
+  BINARY_NAME: mdreader
+
+jobs:
+  build_and_release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install dependencies (for GUI apps on Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev libgtk-3-dev libegl1-mesa-dev libgles2-mesa-dev
+
+      - name: Build release binary
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --verbose
+
+      - name: Create GitHub Release and Upload Asset
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          # The action automatically uses the tag name (e.g., v0.1.1) for the release name
+          # It also uses the commit message associated with the tag for the release body
+          files: target/release/${{ env.BINARY_NAME }} # Path to the compiled binary
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Provided by GitHub Actions
